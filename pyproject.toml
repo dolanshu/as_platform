@@ -23,7 +23,16 @@ classifiers = [
 #
 # pydantic is a runtime dependency because the moved ``hop.NextHop`` value object is a
 # pydantic model, exactly as it is in the reference implementation.
-dependencies = ["sippy==2.4.2", "pydantic>=2.0"]
+#
+# fastapi and uvicorn are runtime dependencies because the moved ``internal_api`` shell
+# serves the console surface as a FastAPI application on a daemon uvicorn thread (ADR-0002),
+# at the same versions the reference implementation pins.
+dependencies = [
+  "sippy==2.4.2",
+  "pydantic>=2.0",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+]
 
 [dependency-groups]
 dev = [
