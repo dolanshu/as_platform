@@ -52,8 +52,9 @@ from as_platform.observability.logging import LogDirection, get_logger, log_even
 from as_platform.observability.metrics import MetricsRegistry, get_metrics_registry
 from as_platform.observability.tracing import TraceRecorder, get_trace_recorder
 from as_platform.sip_adapter import cancel_transaction_timers
+from as_platform.transport import Transport
 
-__all__ = ["BaseAsStack"]
+__all__ = ["BaseAsStack", "Transport"]
 
 _LOGGER = get_logger(__name__)
 
@@ -81,6 +82,7 @@ class BaseAsStack(Generic[SettingsT]):
 
     Attributes:
         settings: The loaded configuration.
+        transport: The local socket the trunk binds and sends on.
         metrics: Counter registry.
         tracer: Per-Call-ID trace recorder.
         internal_api: Health and counters endpoint; ``None`` when it is not started.
@@ -110,8 +112,7 @@ class BaseAsStack(Generic[SettingsT]):
         self,
         settings: SettingsT,
         *,
-        sip_address: str,
-        sip_port: int,
+        transport: Transport,
         peer_address: str,
         peer_port: int,
         allowed_peers: tuple[str, ...],
@@ -125,8 +126,7 @@ class BaseAsStack(Generic[SettingsT]):
 
         Args:
             settings: The loaded configuration.
-            sip_address: Local address the trunk socket binds.
-            sip_port: Local UDP port the trunk socket binds.
+            transport: The local socket the trunk binds and sends on.
             peer_address: Next hop the AS originates towards.
             peer_port: Next hop UDP port.
             allowed_peers: Source addresses accepted on the trunk.
@@ -137,8 +137,7 @@ class BaseAsStack(Generic[SettingsT]):
             sip_logger: Explicit sippy SIP message logger, used by the tooling.
         """
         self.settings = settings
-        self.sip_address = sip_address
-        self.sip_port = sip_port
+        self.transport = transport
         self.peer_address = peer_address
         self.peer_port = peer_port
         self.allowed_peers = allowed_peers
@@ -239,12 +238,11 @@ class BaseAsStack(Generic[SettingsT]):
             AsError: Propagated from sippy when the signalling port cannot be bound.
         """
         SipConf.my_uaname = self.sip_user_agent_name
-        SipConf.my_address = self.sip_address
-        SipConf.my_port = self.sip_port
+        SipConf.my_address = self.transport.address
+        SipConf.my_port = self.transport.port
         self.global_config = {
             "nh_addr": (self.peer_address, self.peer_port),
-            "_sip_address": self.sip_address,
-            "_sip_port": self.sip_port,
+            **self.transport.sip_config(),
             "_sip_uaname": self.sip_user_agent_name,
             "_sip_logger": self._sip_logger,
         }
@@ -258,7 +256,7 @@ class BaseAsStack(Generic[SettingsT]):
             logging.INFO,
             self.bound_log_message,
             direction=LogDirection.INTERNAL,
-            listen=f"{self.sip_address}:{self.sip_port}",
+            listen=f"{self.transport.address}:{self.transport.port}",
             next_hop=f"{self.peer_address}:{self.peer_port}",
             allowed_peers=",".join(self.allowed_peers),
         )
