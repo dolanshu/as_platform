@@ -20,7 +20,10 @@ classifiers = [
 # same pinned stack, because the sippy adapter boundary moves into this package. The pin
 # must not be widened — two sippy versions in one interpreter would break the in-process
 # tests.
-dependencies = ["sippy==2.4.2"]
+#
+# pydantic is a runtime dependency because the moved ``hop.NextHop`` value object is a
+# pydantic model, exactly as it is in the reference implementation.
+dependencies = ["sippy==2.4.2", "pydantic>=2.0"]
 
 [build-system]
 requires = ["hatchling>=1.25"]
