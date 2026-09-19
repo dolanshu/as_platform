@@ -1,0 +1,30 @@
+[project]
+name = "as-platform"
+version = "0.1.0"
+description = "Shared platform skeleton for the third-party IMS/SIP Application Server instances"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Dolan Shu", email = "dolan.d.shu@gmail.com" }]
+maintainers = [{ name = "Dolan Shu", email = "dolan.d.shu@gmail.com" }]
+keywords = ["sip", "ims", "b2bua", "application-server", "platform"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Telecommunications Industry",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.10",
+  "Topic :: Communications :: Telephony",
+]
+
+# One sippy (ADR-0009 decision 1): the library and its reference implementation share the
+# same pinned stack, because the sippy adapter boundary moves into this package. The pin
+# must not be widened — two sippy versions in one interpreter would break the in-process
+# tests.
+dependencies = ["sippy==2.4.2"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/as_platform"]
