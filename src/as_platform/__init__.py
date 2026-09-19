@@ -20,8 +20,40 @@ bootstrap plumbing, the controller and stack shells, and the pluggable transport
 state-store seams. The number-translation and anti-fraud use cases stay in the reference
 repository, which consumes this package from a sibling checkout.
 
-Step 1 of the staged extraction (ADR-0009 decision 7) creates the repository and an empty,
-typed, importable package; the modules above move here in the following steps.
+The modules above move here over the staged extraction of ADR-0009 decision 7, one
+dependency-ordered step at a time; step 2 moved the leaf modules and step 3 the version
+chain and the bootstrap plumbing.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+
+from as_platform.version import read_version, version_file_version
+
+__all__ = ["__version__"]
+
+#: Distribution name declared in ``pyproject.toml``. An installed wheel carries its version
+#: in the distribution metadata under exactly this name.
+_DISTRIBUTION_NAME = "as-platform"
+
+#: Reported when neither the installed distribution metadata nor the ``VERSION`` file yields
+#: a version.
+_UNKNOWN_VERSION = "0.0.0+unknown"
+
+#: Repository ``VERSION`` file, two directories above this module: the version source of a
+#: source checkout.
+_VERSION_FILE = Path(__file__).resolve().parents[2] / "VERSION"
+
+
+def _version_file_version() -> str:
+    """Return the repository version from the ``VERSION`` file.
+
+    Returns:
+        The stripped contents of ``VERSION``, or ``_UNKNOWN_VERSION`` when the file is not
+        present — which is the case for an installed wheel.
+    """
+    return version_file_version(_VERSION_FILE, _UNKNOWN_VERSION)
+
+
+__version__ = read_version(_DISTRIBUTION_NAME, _version_file_version)
