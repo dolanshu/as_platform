@@ -49,6 +49,23 @@ LINT_COMMANDS = ("ruff format --check", "ruff check", "mypy")
 #: The command the library's test target runs (REQ-NF-021).
 TEST_COMMAND = "pytest"
 
+#: The distribution name the library manifest must self-report (ADR-0009 decision 1).
+LIBRARY_DISTRIBUTION = "as-platform"
+
+
+def _project_table(pyproject: str) -> str:
+    """Return the body of the ``[project]`` table of a ``pyproject.toml``.
+
+    Args:
+        pyproject: The manifest content.
+
+    Returns:
+        The lines between ``[project]`` and the next table header, or an empty string when
+        the table is absent.
+    """
+    match = re.search(r"^\[project\]\n(.*?)(?=^\[|\Z)", pyproject, re.DOTALL | re.MULTILINE)
+    return match.group(1) if match else ""
+
 
 def _make_recipe(makefile: str, target: str) -> str:
     """Return the tab-indented recipe lines of one Makefile target.
@@ -115,3 +132,21 @@ def test_pyproject_configures_the_gate_tools() -> None:
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     for table in ("[tool.ruff]", "[tool.ruff.lint]", "[tool.mypy]", "[tool.pytest.ini_options]"):
         assert table in text, f"pyproject.toml has no {table} table"
+
+
+def test_the_library_is_a_standalone_distribution_not_a_workspace_member() -> None:
+    """The library is its own distribution, not a uv workspace member (REQ-NF-019, D8).
+
+    REQ-NF-019 says the new repository is **not** a uv workspace monorepo, and LLD section
+    11.1 states that neither manifest declares the other a ``[tool.uv.workspace]`` member.
+    This asserts the library's own half: its manifest carries no workspace table and it
+    self-reports the distribution name of ADR-0009 decision 1, so it is consumed from a
+    sibling checkout through that repository's ``path`` source rather than being a directory
+    of a shared workspace with one lock and one root.
+    """
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "[tool.uv.workspace]" not in text, "the library must not be a uv workspace member"
+    project = _project_table(text)
+    assert re.search(rf'^name\s*=\s*"{re.escape(LIBRARY_DISTRIBUTION)}"', project, re.MULTILINE), (
+        "the manifest does not self-report `as-platform` (ADR-0009 decision 1)"
+    )

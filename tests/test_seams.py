@@ -80,10 +80,18 @@ def test_the_library_defines_no_second_transport_and_no_second_state_store() -> 
 
 
 def test_the_library_ships_no_tls_no_redis_and_no_capacity_harness() -> None:
-    """No library module is named for a second transport, an external store or a harness."""
+    """No library module is named for a second transport, an external store or a harness.
+
+    The check is on the **module name** — the file stem, lower-cased — and not on module
+    content or class names, so ``tls_config.py``, ``tlsconfig.py`` and ``redis_store.py``
+    all match: matching the stem as a token stream (the earlier ``stem.split("_")`` form)
+    missed ``tlsconfig.py``, which is exactly the hole this form closes. Class names are
+    out of scope here; they are covered by
+    :func:`test_the_library_defines_no_second_transport_and_no_second_state_store`.
+    """
     offenders = sorted(
         path.relative_to(PACKAGE_ROOT).as_posix()
         for path in _library_modules()
-        if P11_ONLY_MODULE_TOKENS & set(path.stem.split("_"))
+        if any(token in path.stem.lower() for token in P11_ONLY_MODULE_TOKENS)
     )
     assert not offenders, f"a P11-only module is present in P10: {offenders}"
