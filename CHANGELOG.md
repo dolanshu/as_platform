@@ -32,6 +32,16 @@ than under `[Unreleased]`.
 - The library's own test suite (`tests/`), covering the pure helpers, the sippy adapter
   boundary, the two seams, the observability surface, the controller shell, the internal
   API shell and the library-level independence assertion of REQ-F-030.
+- The suite's structural boundary guards, added after the first draft (`27fe26e`, `0eeef37`):
+  the two seams ship exactly **one** implementation each and no library module is named for a
+  second transport (TLS), an external store (Redis) or a capacity harness — a **module-name**
+  check, not module content or class names (`REQ-NF-020`, `tests/test_seams.py`); the three
+  library-standard documents exist and the application operations set is not copied, and the
+  library's own gate carries `ruff`, `mypy` and `pytest` in the `Makefile` recipes, the CI
+  `run:` commands and the `pyproject.toml` tool tables (`REQ-NF-019`, `REQ-NF-021`,
+  `tests/test_library_standard.py`); and the manifest self-reports `as-platform` with no
+  `[tool.uv.workspace]` table, so the library is a standalone distribution rather than a uv
+  workspace member (ADR-0009 decision 1).
 - The library's own gate: the `Makefile` (`lint`, `type`, `test`, `check`) and the
   `.github/workflows/ci.yml` workflow that runs it (REQ-NF-021).
 - The three library-standard documents (REQ-NF-019): `docs/api-reference.md`,
