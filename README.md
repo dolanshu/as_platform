@@ -18,11 +18,13 @@ implementation and first user.
 
 ## Status
 
-**0.1.0 — repository skeleton only.** Step 1 of the staged extraction (ADR-0009
-decision 7) creates the repository, the meta files and an empty, typed, importable
-package. The modules listed above move here in the following steps, and the library's own
-test suite, gate and library-standard documents (API reference, integration guide,
-compatibility matrix) arrive in step 7.
+**0.1.0 — extraction complete.** The staged extraction of ADR-0009 decision 7 has moved
+the shared skeleton here: the sippy adapter boundary, the error-model mechanism, the
+observability surface, the bootstrap plumbing, the controller and stack shells, and the
+two pluggable seams (transport and state store). The package is typed, carries its own
+test suite (`tests/`), its own gate (`make check`) and its three library-standard
+documents (API reference, integration guide, compatibility matrix). The two use cases
+stay in the reference repository, and nothing here imports them (REQ-F-030).
 
 ## Installation
 
@@ -46,7 +48,25 @@ rather than linking the checkout (ADR-0009 decision 6).
 VERSION               the library version
 pyproject.toml        hatchling build, `as-platform`, Python 3.10, sippy==2.4.2
 src/as_platform/      the import package (src layout), carrying the PEP 561 py.typed marker
+tests/                the library's own test suite (flat)
+docs/                 API reference, integration guide, compatibility matrix
+Makefile              the library's own gate (lint, type, test)
+.github/workflows/    the CI workflow that runs that gate
 ```
+
+## Development
+
+The library carries its own gate, so a change to it is verifiable where the library
+lives:
+
+```sh
+make lint    # ruff format --check + ruff check + mypy
+make test    # pytest
+make check   # lint + test
+```
+
+`make help` lists every target. CI runs the same gate on every push and pull request to
+`main`.
 
 ## License
 

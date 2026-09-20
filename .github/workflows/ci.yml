@@ -1,0 +1,78 @@
+name: CI
+
+# The library's own gate, so a change to the library is verifiable where the library
+# lives (REQ-NF-021). There is no unit / integration / e2e layering and no docker job:
+# the three layers of AGENT.md section 11 are the application's, not a library's.
+# Every job runs `uv sync --frozen`, which fails when uv.lock is not in sync with
+# pyproject.toml.
+
+on:
+  # Documentation-only changes skip the gate: there is no code or dependency change for
+  # it to verify. `paths-ignore` only skips a run when *every* changed file matches, so a
+  # commit that also touches src/, tests/ or the meta files still runs the full gate.
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.10"
+  UV_VERSION: "0.12.15"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Sync the locked environment
+        run: uv sync --frozen
+      - name: ruff format --check
+        run: uv run ruff format --check .
+      - name: ruff check
+        run: uv run ruff check .
+
+  type:
+    name: type
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Sync the locked environment
+        run: uv sync --frozen
+      - name: mypy
+        run: uv run mypy
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    needs: [type]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+      - name: Sync the locked environment
+        run: uv sync --frozen
+      - name: pytest
+        run: uv run pytest -q

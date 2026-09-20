@@ -49,9 +49,10 @@ build-backend = "hatchling.build"
 packages = ["src/as_platform"]
 
 # The tooling below is equivalent to the reference implementation's: the library carries its
-# own gate, so moved code is formatted, linted and type-checked where it lives. The
-# library's test suite, Makefile gate, CI workflow and its three library-standard documents
-# are a later step and are not written here.
+# own gate, so moved code is formatted, linted and type-checked where it lives. The suite
+# lives in tests/, the gate in the Makefile and .github/workflows/ci.yml, and the three
+# library-standard documents (API reference, integration guide, compatibility matrix) in
+# docs/.
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
