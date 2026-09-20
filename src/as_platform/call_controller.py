@@ -342,6 +342,13 @@ class BaseCallController:
     def decide(self, event: Any) -> PolicyDecision:
         """Take the decision for this call — the only application hook.
 
+        The application returns a reject :class:`PolicyDecision` for a failure it cannot
+        relay and does **not** let an :class:`AsError` escape from here: the base applies
+        the decision as data and cannot build the application's reject vocabulary, so the
+        conversion happens in the application (the reject trace summary and log message
+        travel in the :class:`PolicyDecision`). A ``RELAY`` decision always names at least
+        one hop; an application with no hop to relay to rejects the call itself.
+
         Args:
             event: The ``CCEventTry`` raised by the answering leg.
 
