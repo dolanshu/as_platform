@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""The two pluggable seams ship exactly one implementation each in P10 (REQ-NF-020).
+"""The two pluggable seams ship **two implementations each** after P11.
 
-ADR-0009 decision 5 defines the boundaries and stops there: ``Transport`` is satisfied by
-``UdpTransport`` and ``StateStore`` by ``InMemoryStateStore``, and P10 builds no second
-transport (TLS), no external store (Redis) and no capacity harness (D9, D10). These tests
-pin that boundary against the library's own source, so adding the second implementation in
-P11 is a deliberate change that updates this file rather than one that passes unnoticed.
+P10 defined the boundaries and shipped exactly one implementation per seam (REQ-NF-020,
+ADR-0009 decision 5). P11 added the second: :class:`TlsTransport` for the transport seam,
+:class:`RedisStateStore` for the state-store seam, and :class:`CapacityDriver` as a
+first-class harness. These tests are the P11 successor to P10's boundary protection: they
+pin that **two** implementations exist behind each seam, the harness module is present,
+and ``UdpTransport`` / ``InMemoryStateStore`` remain the defaults (REQ-NF-024).
 """
 
 from __future__ import annotations
@@ -29,9 +30,6 @@ from pathlib import Path
 from as_platform import state_store, transport
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "src" / "as_platform"
-
-#: The P11-only module vocabulary P10 must not contain (ADR-0009 decision 5).
-P11_ONLY_MODULE_TOKENS = frozenset({"tls", "redis", "harness"})
 
 
 def _library_modules() -> list[Path]:
@@ -56,42 +54,42 @@ def _defined_class_names() -> set[str]:
     return names
 
 
-def test_the_transport_seam_exports_the_boundary_and_one_implementation() -> None:
-    """``as_platform.transport`` exposes the interface and its only P10 implementation."""
-    assert transport.__all__ == ["Transport", "UdpTransport"]
+def test_the_transport_seam_exports_the_boundary_and_two_implementations() -> None:
+    """``as_platform.transport`` exposes Transport, UdpTransport and TlsTransport.
+
+    TlsTransport is P11's second implementation — the proof that the seam is pluggable.
+    """
+    assert transport.__all__ == ["Transport", "TlsTransport", "UdpTransport"]
 
 
-def test_the_state_store_seam_exports_the_boundary_and_one_implementation() -> None:
-    """``as_platform.state_store`` exposes the interface and its only P10 implementation."""
-    assert state_store.__all__ == ["InMemoryStateStore", "StateStore"]
+def test_the_state_store_seam_exports_the_boundary_and_two_implementations() -> None:
+    """``as_platform.state_store`` exposes StateStore, InMemoryStateStore and RedisStateStore.
+
+    RedisStateStore is P11's second implementation — the proof that the seam is pluggable.
+    """
+    assert state_store.__all__ == [
+        "InMemoryStateStore",
+        "RedisStateStore",
+        "StateStore",
+    ]
 
 
-def test_the_library_defines_no_second_transport_and_no_second_state_store() -> None:
-    """Every ``*Transport`` / ``*StateStore`` class is the interface or its one P10 class."""
+def test_the_library_defines_two_transports_and_two_state_stores() -> None:
+    """Every *Transport / *StateStore class is the interface or one of its two implementations."""
     classes = _defined_class_names()
     assert {name for name in classes if name.endswith("Transport")} == {
         "Transport",
+        "TlsTransport",
         "UdpTransport",
     }
     assert {name for name in classes if name.endswith("StateStore")} == {
         "InMemoryStateStore",
+        "RedisStateStore",
         "StateStore",
     }
 
 
-def test_the_library_ships_no_tls_no_redis_and_no_capacity_harness() -> None:
-    """No library module is named for a second transport, an external store or a harness.
-
-    The check is on the **module name** — the file stem, lower-cased — and not on module
-    content or class names, so ``tls_config.py``, ``tlsconfig.py`` and ``redis_store.py``
-    all match: matching the stem as a token stream (the earlier ``stem.split("_")`` form)
-    missed ``tlsconfig.py``, which is exactly the hole this form closes. Class names are
-    out of scope here; they are covered by
-    :func:`test_the_library_defines_no_second_transport_and_no_second_state_store`.
-    """
-    offenders = sorted(
-        path.relative_to(PACKAGE_ROOT).as_posix()
-        for path in _library_modules()
-        if any(token in path.stem.lower() for token in P11_ONLY_MODULE_TOKENS)
-    )
-    assert not offenders, f"a P11-only module is present in P10: {offenders}"
+def test_the_library_ships_the_capacity_harness_module() -> None:
+    """capacity_harness is present as a first-class library module (REQ-F-037)."""
+    stems = {path.stem for path in _library_modules()}
+    assert "capacity_harness" in stems

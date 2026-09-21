@@ -240,6 +240,9 @@ class BaseAsStack(Generic[SettingsT]):
         SipConf.my_uaname = self.sip_user_agent_name
         SipConf.my_address = self.transport.address
         SipConf.my_port = self.transport.port
+        # Transport-level resources (TlsTransport allocates its local UDP port here,
+        # which sip_config() needs to return before SipTransactionManager binds).
+        self.transport.start()
         self.global_config = {
             "nh_addr": (self.peer_address, self.peer_port),
             **self.transport.sip_config(),
@@ -329,6 +332,8 @@ class BaseAsStack(Generic[SettingsT]):
         if self.internal_api is not None:
             self.internal_api.stop()
             self.internal_api = None
+        # Transport-level cleanup (after sippy releases its UDP socket).
+        self.transport.stop()
 
     @staticmethod
     def _poll_shutdown(shutdown: ShutdownController) -> None:

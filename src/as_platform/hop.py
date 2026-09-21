@@ -36,8 +36,9 @@ class NextHop(BaseModel):
     Attributes:
         name: Configuration key referenced by routing rules.
         address: IP address or FQDN of the peer.
-        port: UDP port of the peer.
-        transport: Transport; only ``udp`` exists in this POC (ADR-0003).
+        port: SIP port of the peer (default 5060 for UDP, 5061 for TLS).
+        transport: Transport the B2BUA uses to reach this peer; ``udp`` is the default
+            (ADR-0003), ``tls`` is added in P11 (ADR-0010 decision 2).
         priority: Selection order, lower wins. Equal priorities keep file order.
         description: What this peer is, for the console.
     """
@@ -47,6 +48,6 @@ class NextHop(BaseModel):
     name: str
     address: str
     port: int = Field(default=5060, ge=1, le=65535)
-    transport: Literal["udp"] = "udp"
+    transport: Literal["udp", "tls"] = "udp"
     priority: int = Field(default=1, ge=1)
     description: str = ""
