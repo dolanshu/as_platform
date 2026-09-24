@@ -139,6 +139,7 @@ def test_the_app_factory_registers_the_documented_routes() -> None:
         "/api/v1/widgets",
         "/api/v1/traces",
         "/api/v1/traces/{call_id}",
+        "/api/v1/traces/{call_id}/messages",
         "/ws/events",
     ):
         assert expected in paths

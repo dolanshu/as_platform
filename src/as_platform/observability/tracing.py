@@ -36,6 +36,9 @@ from typing import Any
 
 __all__ = [
     "CallTrace",
+    "DEFAULT_MAX_CAPTURED_MESSAGES",
+    "DEFAULT_MAX_TRACED_CALLS",
+    "DualSipLogger",
     "RecordedSipMessage",
     "SipMessageRecorder",
     "TraceEvent",
@@ -46,6 +49,9 @@ __all__ = [
 #: Number of most recent calls kept in memory. The trace is a demo artefact, not a
 #: persistence layer (see ``docs/production-gaps.md``).
 DEFAULT_MAX_TRACED_CALLS = 200
+
+#: Maximum SIP messages retained in memory for the console modal (REQ-NF-031).
+DEFAULT_MAX_CAPTURED_MESSAGES = 5000
 
 #: ``Call-ID: <value>`` inside a raw SIP message. The trailing ``\r`` has to be part of
 #: the pattern: SIP lines end with CRLF and ``$`` only matches before ``\n``.
@@ -221,6 +227,29 @@ class RecordedSipMessage:
     call_id: str
 
 
+class DualSipLogger:
+    """Forwards sippy ``write()`` to two delegates (ADR-0016 Phase B dual-write).
+
+    The AS process keeps its normal ``SipLogger`` behaviour while also feeding an in-memory
+    :class:`SipMessageRecorder` for the console messages API.
+    """
+
+    def __init__(self, primary: Any, recorder: SipMessageRecorder) -> None:
+        """Create a dual-write logger.
+
+        Args:
+            primary: The normal sippy logger (often a ``SipLogger``).
+            recorder: In-memory recorder exposed on the internal API.
+        """
+        self._primary = primary
+        self._recorder = recorder
+
+    def write(self, *args: Any, **kwargs: Any) -> None:
+        """Record the message in both delegates."""
+        self._primary.write(*args, **kwargs)
+        self._recorder.write(*args, **kwargs)
+
+
 class SipMessageRecorder:
     """Captures every SIP message sippy writes, as the wire saw it.
 
@@ -231,11 +260,17 @@ class SipMessageRecorder:
     itself uses a real ``SipLogger`` (or a silent one, see ``LOG_PAYLOADS``).
 
     Attributes:
+        max_messages: How many messages are retained before the oldest is discarded.
         messages: The captured messages, in the order they were written.
     """
 
-    def __init__(self) -> None:
-        """Create an empty recorder."""
+    def __init__(self, max_messages: int = DEFAULT_MAX_CAPTURED_MESSAGES) -> None:
+        """Create an empty recorder.
+
+        Args:
+            max_messages: Maximum number of messages retained in memory.
+        """
+        self.max_messages = max_messages
         self._lock = threading.Lock()
         self.messages: list[RecordedSipMessage] = []
 
@@ -254,6 +289,8 @@ class SipMessageRecorder:
         message = RecordedSipMessage(direction=direction, peer=peer, text=text, call_id=call_id)
         with self._lock:
             self.messages.append(message)
+            while len(self.messages) > self.max_messages:
+                self.messages.pop(0)
 
     def messages_for_any(self, call_ids: Iterable[str]) -> list[RecordedSipMessage]:
         """Return the messages carrying any of the given Call-IDs, in capture order.

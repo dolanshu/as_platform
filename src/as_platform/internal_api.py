@@ -37,6 +37,7 @@ Endpoints (ADR-0002)::
     GET <provider.resource_path>     — the instance's own read-only resource
     GET /api/v1/traces               — most recent calls with their trace events
     GET /api/v1/traces/{call_id}     — one call, Call-ID keyed
+    GET /api/v1/traces/{call_id}/messages — verbatim SIP for trunk + outbound legs
     WS  /ws/events                   — live event feed for the console
 
 Nothing here imports an application package (REQ-F-030).
@@ -54,13 +55,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from as_platform.observability.metrics import MetricsRegistry
-from as_platform.observability.tracing import CallTrace, TraceEvent, TraceRecorder
+from as_platform.observability.tracing import CallTrace, SipMessageRecorder, TraceEvent, TraceRecorder
+from as_platform.sip_adapter import outbound_call_id
 
 __all__ = [
     "InternalApiServer",
     "PayloadProvider",
     "create_internal_api_app",
     "health_payload",
+    "messages_payload",
     "metrics_payload",
     "trace_payload",
     "traces_payload",
@@ -228,6 +231,33 @@ def traces_payload(recorder: TraceRecorder, limit: int = 20) -> dict[str, Any]:
     return {"calls": [trace_payload(trace) for trace in recorder.recent(limit)]}
 
 
+def messages_payload(trunk_call_id: str, sip_recorder: SipMessageRecorder) -> dict[str, Any]:
+    """Build the verbatim SIP capture payload for one trunk Call-ID.
+
+    Args:
+        trunk_call_id: SIP Call-ID of the trunk leg.
+        sip_recorder: In-memory recorder fed by the sippy stack.
+
+    Returns:
+        The document served on ``GET /api/v1/traces/{call_id}/messages``.
+    """
+    outbound_id = outbound_call_id(trunk_call_id)
+    messages = sip_recorder.messages_for_any((trunk_call_id, outbound_id))
+    return {
+        "call_id": trunk_call_id,
+        "outbound_call_id": outbound_id,
+        "messages": [
+            {
+                "direction": message.direction,
+                "peer": message.peer,
+                "call_id": message.call_id,
+                "text": message.text,
+            }
+            for message in messages
+        ],
+    }
+
+
 def create_internal_api_app(
     *,
     version: str,
@@ -235,6 +265,7 @@ def create_internal_api_app(
     metrics: MetricsRegistry,
     tracer: TraceRecorder,
     started_at: float,
+    sip_recorder: SipMessageRecorder | None = None,
 ) -> FastAPI:
     """Create the FastAPI application for the internal API.
 
@@ -249,6 +280,8 @@ def create_internal_api_app(
         metrics: Counter registry exposed on ``/api/v1/metrics``.
         tracer: Trace recorder exposed on ``/api/v1/traces``.
         started_at: ``time.monotonic()`` value at server creation, for uptime.
+        sip_recorder: Verbatim SIP recorder for ``/api/v1/traces/{call_id}/messages``; when
+            omitted the route returns empty ``messages``.
 
     Returns:
         A FastAPI application with the internal API routes.
@@ -324,6 +357,20 @@ def create_internal_api_app(
         """
         return trace_payload(tracer.trace_for(call_id))
 
+    @app.get("/api/v1/traces/{call_id}/messages")
+    def get_trace_messages(call_id: str) -> dict[str, Any]:
+        """Verbatim SIP messages for one trunk Call-ID and its outbound leg.
+
+        Args:
+            call_id: SIP Call-ID of the trunk leg.
+
+        Returns:
+            Trunk and outbound Call-IDs plus captured wire-format messages.
+        """
+        if sip_recorder is None:
+            return {"call_id": call_id, "outbound_call_id": outbound_call_id(call_id), "messages": []}
+        return messages_payload(call_id, sip_recorder)
+
     @app.websocket("/ws/events")
     async def ws_events(websocket: WebSocket) -> None:
         """Live event feed for the console.
@@ -382,6 +429,7 @@ class InternalApiServer:
         provider: PayloadProvider,
         metrics: MetricsRegistry,
         tracer: TraceRecorder,
+        sip_recorder: SipMessageRecorder | None = None,
     ) -> None:
         """Create the internal API server.
 
@@ -392,6 +440,7 @@ class InternalApiServer:
             provider: The instance's identity, readiness key and resource payload.
             metrics: Counter registry.
             tracer: Trace recorder.
+            sip_recorder: Verbatim SIP recorder for the messages route.
         """
         self.address = address
         self.port = port
@@ -399,6 +448,7 @@ class InternalApiServer:
         self.provider = provider
         self.metrics = metrics
         self.tracer = tracer
+        self.sip_recorder = sip_recorder
         self.started_at = time.monotonic()
         self._server: Any = None
         self._thread: threading.Thread | None = None
@@ -422,6 +472,7 @@ class InternalApiServer:
             metrics=self.metrics,
             tracer=self.tracer,
             started_at=self.started_at,
+            sip_recorder=self.sip_recorder,
         )
         config = uvicorn.Config(
             app,

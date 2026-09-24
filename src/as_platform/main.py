@@ -50,7 +50,12 @@ from as_platform.call_controller import BaseCallMap
 from as_platform.internal_api import InternalApiServer
 from as_platform.observability.logging import LogDirection, get_logger, log_event
 from as_platform.observability.metrics import MetricsRegistry, get_metrics_registry
-from as_platform.observability.tracing import TraceRecorder, get_trace_recorder
+from as_platform.observability.tracing import (
+    DualSipLogger,
+    SipMessageRecorder,
+    TraceRecorder,
+    get_trace_recorder,
+)
 from as_platform.sip_adapter import cancel_transaction_timers
 from as_platform.transport import Transport
 
@@ -85,6 +90,7 @@ class BaseAsStack(Generic[SettingsT]):
         transport: The local socket the trunk binds and sends on.
         metrics: Counter registry.
         tracer: Per-Call-ID trace recorder.
+        sip_message_recorder: Verbatim SIP capture fed to the messages API.
         internal_api: Health and counters endpoint; ``None`` when it is not started.
         transaction_manager: The sippy transaction manager of the process.
         global_config: The sippy global configuration handed to every sippy object.
@@ -224,12 +230,17 @@ class BaseAsStack(Generic[SettingsT]):
         Returns:
             An object with the ``write()`` interface sippy expects.
         """
+        if isinstance(sip_logger, SipMessageRecorder):
+            self.sip_message_recorder = sip_logger
+            return sip_logger
         if sip_logger is not None:
             return sip_logger
         logger = SipLogger(self.sip_logger_name)
         if not self.settings.log_payloads:
             logger.write = logger.donoting
-        return logger
+        recorder = SipMessageRecorder()
+        self.sip_message_recorder = recorder
+        return DualSipLogger(logger, recorder)
 
     def start(self) -> None:
         """Bind the trunk socket, the transaction manager and the call map.
